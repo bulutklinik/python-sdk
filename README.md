@@ -1,0 +1,131 @@
+# bulutklinik-sdk
+
+Official Bulutklinik API SDK for Python. Sync **and** async (httpx), fully typed
+(`py.typed`), Python 3.9+.
+
+Covers the patient flow: **auth, doctor search, slots, appointments, payments,
+and health measures**. See [`DESIGN.md`](./DESIGN.md) for the full wire contract.
+
+## Install
+
+```bash
+pip install bulutklinik-sdk
+```
+
+## Quick start (sync)
+
+```python
+from bulutklinik import BulutklinikClient
+
+with BulutklinikClient(
+    environment="production",  # "production" | "test" | "local"
+    client_id="…",
+    client_secret="…",
+) as client:
+    # 1) Log in (tokens are stored automatically)
+    login = client.auth.connect("patient@example.com", "•••••••", "email")
+
+    if login.two_factor_required:
+        client.auth.connect_with_two_factor("123456", login.two_factor_response)
+
+    # 2) Find a doctor
+    result = client.doctors.search(
+        search_params={"withFreeText": "kardiyoloji"},
+        order_params=["slot"],
+        other_params=["isInterviewable"],
+    )
+
+    # 3) Slots, then 4) reserve ("YYYY-MM-DD HH:mm")
+    doctor_id = result["foundDoctors"][0]["doctor_id"]
+    slots = client.slots.schedule(doctor_id, "interview")
+    client.appointments.reserve_interview(doctor_id, "2026-06-20 14:30")
+```
+
+## Quick start (async)
+
+```python
+from bulutklinik import AsyncBulutklinikClient
+
+async with AsyncBulutklinikClient(environment="production", client_id="…", client_secret="…") as client:
+    await client.auth.connect("patient@example.com", "•••••••", "email")
+    result = await client.doctors.search(search_params={"withFreeText": "kardiyoloji"})
+```
+
+## Services
+
+| Group                   | Methods |
+|-------------------------|---------|
+| `client.auth`           | `connect`, `connect_with_two_factor`, `register`, `refresh`, `disconnect` |
+| `client.doctors`        | `branches`, `locations`, `quick_search`, `search`, `detail` |
+| `client.slots`          | `schedule` |
+| `client.appointments`   | `reserve_interview`, `add_physical`, `cancel` |
+| `client.payments`       | `check_discount_code`, `get_cards`, `save_card`, `pay`, `delete_card` |
+| `client.measures`       | `add_list`, `add`, `update`, `delete`, `last`, `list`, `graph`, `partner_health_information` |
+
+The async client exposes the same methods (awaitable) under the same names.
+
+## Authentication & tokens
+
+- `connect` / `connect_with_two_factor` / `register` store the access + refresh
+  tokens automatically.
+- On a `401` (or `resultType 4`), the SDK silently refreshes once and retries.
+- Provide a custom token store by implementing `bulutklinik.TokenStore` and
+  passing it via `token_store=…`.
+
+## Payments (3-D Secure)
+
+`payments.pay(...)` returns a dict with `payment3DUrl` on a 3DS flow. Open that URL
+in a browser; the bank → server callback completes the capture. The SDK never
+opens or parses the URL.
+
+## Health measures
+
+```python
+client.measures.add_list([
+    {"type": "tension", "date_time": "2026-06-17 09:30", "hypertension": 120, "hypotension": 80},
+    {"type": "glucose", "date_time": "2026-06-17 09:35", "glucose": 95, "glucose_type": 0},
+])
+
+client.measures.last()
+client.measures.list("glucose", 1, 0)  # glucose_type 0=fasting, 1=postprandial
+client.measures.graph("tension", 2, 1)  # period 2 = weekly
+```
+
+> The partner endpoint (`partner_health_information`) uses `partner_token` from
+> the client config. The API currently matches the patient by `phone_number`;
+> pass both `identity` and `phone_number` for forward compatibility.
+
+## Errors
+
+All errors subclass `bulutklinik.BulutklinikError`:
+
+`TransportError` (network) · `ApiError` → `ValidationError` (422),
+`AuthenticationError` (401 / logout), `AuthorizationError` (403),
+`NotFoundError` (404), `RateLimitError` (429, `.retry_after`).
+Attributes: `http_status`, `result_type`, `error_type`, `data`, `method`, `path`,
+`retry_after`.
+
+```python
+from bulutklinik import RateLimitError, ValidationError
+
+try:
+    client.payments.pay(doctor_id, "2026-06-20 14:30", is_3d=True, terms_accept=True, card_id=5)
+except RateLimitError as exc:
+    print("retry after", exc.retry_after)
+except ValidationError as exc:
+    print("invalid:", exc.data)
+```
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+ruff check .
+ruff format --check .
+mypy
+pytest
+```
+
+## License
+
+MIT
