@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from types import TracebackType
+from typing import Any
 
 import httpx
 
 from . import aresources, resources
 from ._http import AsyncHttpClient, HttpClient
+from ._spec import AuthMode, RequestSpec
 from .config import Environment, resolve_base_url
 from .tokens import InMemoryTokenStore, TokenStore
 
@@ -52,6 +54,35 @@ class BulutklinikClient:
         self.appointments = resources.AppointmentsResource(self._http)
         self.payments = resources.PaymentsResource(self._http)
         self.measures = resources.MeasuresResource(self._http)
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        auth: AuthMode = "bearer",
+        body: dict[str, Any] | None = None,
+    ) -> Any:
+        """Escape hatch: call any Bulutklinik API endpoint that does not yet have
+        a typed resource method.
+
+        The request still goes through the shared transport, so default headers,
+        the chosen ``auth`` mode (``"bearer"`` by default), silent token refresh +
+        retry, envelope unwrapping and the typed error hierarchy all apply. Returns
+        the unwrapped ``data`` payload. Prefer a typed resource method when one
+        exists; reach for ``request`` only for the gaps.
+
+        :param method: HTTP method (``"GET"`` / ``"POST"`` / ``"PUT"`` / ``"DELETE"``).
+        :param path: Path relative to the configured base URL, e.g. ``"/patients/allBranches"``.
+        :param auth: Auth mode — ``"public"`` / ``"bearer"`` (default) / ``"partner"``.
+        :param body: Optional JSON payload (a dict); omitted on ``GET``.
+
+        Example::
+
+            branches = client.request("GET", "/patients/allBranches")
+            created = client.request("POST", "/patients/someNewEndpoint", body={"foo": "bar"})
+        """
+        return self._http.send(RequestSpec(method, path, auth, body))
 
     def close(self) -> None:
         self._http.close()
@@ -102,6 +133,35 @@ class AsyncBulutklinikClient:
         self.appointments = aresources.AsyncAppointmentsResource(self._http)
         self.payments = aresources.AsyncPaymentsResource(self._http)
         self.measures = aresources.AsyncMeasuresResource(self._http)
+
+    async def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        auth: AuthMode = "bearer",
+        body: dict[str, Any] | None = None,
+    ) -> Any:
+        """Escape hatch: call any Bulutklinik API endpoint that does not yet have
+        a typed resource method.
+
+        The request still goes through the shared transport, so default headers,
+        the chosen ``auth`` mode (``"bearer"`` by default), silent token refresh +
+        retry, envelope unwrapping and the typed error hierarchy all apply. Returns
+        the unwrapped ``data`` payload. Prefer a typed resource method when one
+        exists; reach for ``request`` only for the gaps.
+
+        :param method: HTTP method (``"GET"`` / ``"POST"`` / ``"PUT"`` / ``"DELETE"``).
+        :param path: Path relative to the configured base URL, e.g. ``"/patients/allBranches"``.
+        :param auth: Auth mode — ``"public"`` / ``"bearer"`` (default) / ``"partner"``.
+        :param body: Optional JSON payload (a dict); omitted on ``GET``.
+
+        Example::
+
+            branches = await client.request("GET", "/patients/allBranches")
+            created = await client.request("POST", "/patients/someNewEndpoint", body={"foo": "bar"})
+        """
+        return await self._http.send(RequestSpec(method, path, auth, body))
 
     async def aclose(self) -> None:
         await self._http.aclose()

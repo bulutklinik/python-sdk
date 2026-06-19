@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from bulutklinik import AsyncBulutklinikClient, InMemoryTokenStore, NotFoundError
-from helpers import recording_transport
+from helpers import body_of, recording_transport
 
 
 async def test_async_unwraps_and_sends_headers() -> None:
@@ -42,6 +42,38 @@ async def test_async_refresh_and_retry() -> None:
 
     assert res == {"ok": True}
     assert store.get_access_token() == "new"
+
+
+async def test_async_request_escape_hatch_bearer_get() -> None:
+    transport, requests = recording_transport(
+        lambda req: httpx.Response(200, json={"resultType": 0, "data": {"ok": True}})
+    )
+    async with AsyncBulutklinikClient(
+        environment="test", transport=transport, token_store=InMemoryTokenStore("abc")
+    ) as client:
+        res = await client.request("GET", "/patients/customEndpoint")
+
+    assert res == {"ok": True}
+    req = requests[0]
+    assert str(req.url) == "https://apitest.bulutklinik.com/api/v3/patients/customEndpoint"
+    assert req.method == "GET"
+    assert req.headers["Authorization"] == "Bearer abc"
+
+
+async def test_async_request_escape_hatch_public_post_body() -> None:
+    transport, requests = recording_transport(
+        lambda req: httpx.Response(200, json={"resultType": 0, "data": {"id": 7}})
+    )
+    async with AsyncBulutklinikClient(environment="test", transport=transport) as client:
+        res = await client.request(
+            "POST", "/general/somePublicEndpoint", auth="public", body={"foo": "bar"}
+        )
+
+    assert res == {"id": 7}
+    req = requests[0]
+    assert req.method == "POST"
+    assert "Authorization" not in req.headers
+    assert body_of(req) == {"foo": "bar"}
 
 
 async def test_async_error_mapping() -> None:

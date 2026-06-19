@@ -33,6 +33,38 @@ def test_unwraps_data_and_sends_headers() -> None:
     assert body_of(req) == {"searchText": "kardiyo", "listType": None, "location": None}
 
 
+def test_request_escape_hatch_bearer_get() -> None:
+    transport, requests = recording_transport(
+        lambda req: httpx.Response(200, json={"resultType": 0, "data": {"ok": True}})
+    )
+    client = BulutklinikClient(
+        environment="test", transport=transport, token_store=InMemoryTokenStore("abc")
+    )
+
+    res = client.request("GET", "/patients/customEndpoint")
+
+    assert res == {"ok": True}
+    req = requests[0]
+    assert str(req.url) == "https://apitest.bulutklinik.com/api/v3/patients/customEndpoint"
+    assert req.method == "GET"
+    assert req.headers["Authorization"] == "Bearer abc"
+
+
+def test_request_escape_hatch_public_post_body() -> None:
+    transport, requests = recording_transport(
+        lambda req: httpx.Response(200, json={"resultType": 0, "data": {"id": 7}})
+    )
+    client = BulutklinikClient(environment="test", transport=transport)
+
+    res = client.request("POST", "/general/somePublicEndpoint", auth="public", body={"foo": "bar"})
+
+    assert res == {"id": 7}
+    req = requests[0]
+    assert req.method == "POST"
+    assert "Authorization" not in req.headers
+    assert body_of(req) == {"foo": "bar"}
+
+
 def test_maps_422_to_validation() -> None:
     transport, _ = recording_transport(
         lambda req: httpx.Response(422, json={"resultType": 1, "errorType": "validation"})
