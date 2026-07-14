@@ -261,3 +261,32 @@ def partner_health_information(
         "partner",
         {"identity": identity, "phoneNumber": phone_number, "data": data},
     )
+
+
+# --- skin ---
+
+
+def image_check(images: list[dict[str, Any]]) -> RequestSpec:
+    return RequestSpec("POST", "/patients/imageCheck", "bearer", {"images": images})
+
+
+# --- meals ---
+
+
+def analyze_meal(
+    image: str,
+    portion_size: str,
+    meal_type: str,
+    portion_grams: int | str | None,
+    note: str | None,
+) -> RequestSpec:
+    body: dict[str, Any] = {
+        "image": image,
+        "portion_size": portion_size,
+        "meal_type": meal_type,
+    }
+    if portion_grams is not None:
+        body["portion_grams"] = portion_grams
+    if note is not None:
+        body["note"] = note
+    return RequestSpec("POST", "/patients/imageAnalyzeMeal", "bearer", body)

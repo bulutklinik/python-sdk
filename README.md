@@ -61,6 +61,8 @@ async with AsyncBulutklinikClient(environment="production", client_id="…", cli
 | `client.appointments`   | `reserve_interview`, `add_physical`, `cancel` |
 | `client.payments`       | `check_discount_code`, `get_cards`, `save_card`, `pay`, `delete_card` |
 | `client.measures`       | `add_list`, `add`, `update`, `delete`, `last`, `list`, `graph`, `partner_health_information` |
+| `client.skin`           | `analyze` |
+| `client.meals`          | `analyze` |
 
 The async client exposes the same methods (awaitable) under the same names.
 
@@ -94,6 +96,26 @@ client.measures.graph("tension", 2, 1)  # period 2 = weekly
 > The partner endpoint (`partner_health_information`) uses `partner_token` from
 > the client config. The API currently matches the patient by `phone_number`;
 > pass both `identity` and `phone_number` for forward compatibility.
+
+## AI image analysis
+
+```python
+# "Cildimde Neyim Var" — analyze one or more skin photos (base64)
+result = client.skin.analyze([{"image": b64}])
+for s in result["status"]:
+    print(s["label"], s["comment"], s["possible_icd"])
+    # s["case_detail"] can be forwarded verbatim as a payment's case_detail
+
+# Meal photo → calorie/nutrition estimate
+meal = client.meals.analyze(
+    image=b64,
+    portion_size="medium",  # small | medium | large | custom
+    meal_type="lunch",       # breakfast | lunch | dinner | snack
+    # portion_grams=300,     # required when portion_size is "custom"
+    # note="az yağlı",
+)
+print(meal["status"]["comment"])
+```
 
 ## Errors
 

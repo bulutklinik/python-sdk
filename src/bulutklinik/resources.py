@@ -263,3 +263,43 @@ class MeasuresResource:
         self, *, identity: str | None = None, phone_number: str | None = None, data: _MeasureRecords
     ) -> Any:
         return self._http.send(_spec.partner_health_information(identity, phone_number, data))
+
+
+class SkinResource:
+    """AI skin-lesion analysis ("Cildimde Neyim Var")."""
+
+    def __init__(self, http: HttpClient) -> None:
+        self._http = http
+
+    def analyze(self, images: list[dict[str, Any]]) -> Any:
+        """Analyze one or more skin photos. Each image is classified (lesion
+        ``label``), summarized in Turkish (``comment``), and returned with quality
+        flags, a ``confidence``, possible ICD hints and an opaque ``case_detail``
+        blob. The ``case_detail`` may be forwarded verbatim as a payment's
+        ``caseDetail``.
+        """
+        return self._http.send(_spec.image_check(images))
+
+
+class MealsResource:
+    """AI meal-photo calorie/nutrition estimation (sibling of ``skin``)."""
+
+    def __init__(self, http: HttpClient) -> None:
+        self._http = http
+
+    def analyze(
+        self,
+        image: str,
+        portion_size: str,
+        meal_type: str,
+        *,
+        portion_grams: int | str | None = None,
+        note: str | None = None,
+    ) -> Any:
+        """Estimate calories and nutrition from a meal photo. The input names map
+        to the API's snake_case body (``image``, ``portion_size``, ``meal_type``);
+        ``portion_grams`` and ``note`` are sent only when provided.
+        """
+        return self._http.send(
+            _spec.analyze_meal(image, portion_size, meal_type, portion_grams, note)
+        )
