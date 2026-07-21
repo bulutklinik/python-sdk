@@ -55,16 +55,17 @@ async with AsyncBulutklinikClient(environment="production", client_id="…", cli
 
 | Group                   | Methods |
 |-------------------------|---------|
-| `client.auth`           | `connect`, `connect_with_two_factor`, `verify_registration`, `register`, `refresh`, `disconnect` |
+| `client.auth`           | `connect`, `connect_with_two_factor`, `verify_registration`, `confirm_registration_email`, `register`, `verify_registration_social`, `register_social`, `forgot_password`, `reset_password`, `refresh`, `disconnect` |
 | `client.doctors`        | `branches`, `locations`, `quick_search`, `search`, `detail` |
 | `client.slots`          | `schedule` |
-| `client.appointments`   | `reserve_interview`, `add_physical`, `cancel` |
+| `client.appointments`   | `reserve_interview`, `add_physical`, `cancel`, `list`, `reservations` |
 | `client.payments`       | `check_discount_code`, `get_cards`, `save_card`, `pay`, `delete_card` |
 | `client.measures`       | `add_list`, `add`, `update`, `delete`, `last`, `list`, `graph`, `partner_health_information` |
 | `client.skin`           | `analyze` |
 | `client.meals`          | `analyze` |
 | `client.laboratory`     | `results`, `result_detail`, `catalog`, `catalog_detail`, `order` |
 | `client.diets`          | `list`, `detail` |
+| `client.addresses`      | `list`, `add`, `update`, `delete` |
 
 The async client exposes the same methods (awaitable) under the same names.
 

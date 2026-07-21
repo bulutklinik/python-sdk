@@ -123,6 +123,91 @@ class AuthResource:
         data = self._http.send(RequestSpec("POST", "/patients/addNewPatient", "public", body))
         store_tokens(data, self._http.token_store)
 
+    def confirm_registration_email(
+        self,
+        *,
+        verification_code: str,
+        response: str,
+        user_agreements: list[Any] | None = None,
+    ) -> Any:
+        """Registration step 2 (e-mail branch): confirm the e-mailed code, get the SMS blob.
+
+        When :meth:`verify_registration` returned ``confirmationType == "email"``, confirm
+        the code here with the same ``response`` blob. Returns a fresh ``response`` blob +
+        ``confirmationType: "sms"`` to feed into :meth:`register`. Public.
+        """
+        return self._http.send(
+            _spec.confirm_registration_email(verification_code, response, user_agreements)
+        )
+
+    def verify_registration_social(
+        self,
+        *,
+        name: str,
+        surname: str,
+        phone_number: str,
+        password: str,
+        social_type: str,
+        key: str,
+        email: str | None = None,
+        accept_user_agreement: int = 1,
+        user_agreements: list[Any] | None = None,
+    ) -> Any:
+        """Social sign-up step 1: send the SMS code, return a ``response`` blob. Public."""
+        return self._http.send(
+            _spec.verify_registration_social(
+                name,
+                surname,
+                phone_number,
+                password,
+                social_type,
+                key,
+                email,
+                accept_user_agreement,
+                user_agreements,
+            )
+        )
+
+    def register_social(
+        self,
+        *,
+        sms_verification_code: str,
+        response: str,
+        user_agreements: list[Any] | None = None,
+    ) -> Any:
+        """Social sign-up step 2: create the social patient. Does NOT log in — call
+        :meth:`connect` with ``login_mode="social"`` afterwards. Public.
+        """
+        return self._http.send(
+            _spec.register_social(sms_verification_code, response, user_agreements)
+        )
+
+    def forgot_password(
+        self,
+        *,
+        phone_number: str,
+        birthdate: str | None = None,
+        recaptcha_v2: str | None = None,
+        captcha: str | None = None,
+    ) -> Any:
+        """Password reset step 1: send the SMS confirm code, return a ``response`` blob.
+
+        A CAPTCHA token (``recaptcha_v2`` or ``captcha``) is required outside local env. Public.
+        """
+        return self._http.send(
+            _spec.forgot_password(phone_number, birthdate, recaptcha_v2, captcha)
+        )
+
+    def reset_password(
+        self,
+        *,
+        sms_confirm_code: str,
+        response: str,
+        password: str,
+    ) -> Any:
+        """Password reset step 2: set the new password with the SMS confirm code + blob. Public."""
+        return self._http.send(_spec.reset_password(sms_confirm_code, response, password))
+
     def refresh(self) -> None:
         self._http.refresh()
 
@@ -205,6 +290,92 @@ class AppointmentsResource:
 
     def cancel(self, event_id: int | str) -> Any:
         return self._http.send(_spec.cancel_appointment(event_id))
+
+    def list(self, page: int | str | None = None) -> Any:
+        """The patient's appointments (``{foundAppointmentsCount, foundAppointments}``).
+
+        Each item's ``event_id`` is the id for :meth:`cancel`; rows with ``event_id`` ``"0"``
+        are paid-order/refund entries (not cancellable). Server paging is disabled — page 1
+        (the default) returns the full list.
+        """
+        return self._http.send(_spec.user_appointments(page))
+
+    def reservations(self) -> Any:
+        """The patient's active online-slot reservation holds (with a ``minute_diff`` countdown)."""
+        return self._http.send(_spec.user_reservations())
+
+
+class AddressesResource:
+    """The patient's saved addresses. Required by ``laboratory.order`` (needs an ``addressId``)."""
+
+    def __init__(self, http: HttpClient) -> None:
+        self._http = http
+
+    def list(self) -> Any:
+        """List saved addresses (default first). Each item's ``id`` is the ``addressId``."""
+        return self._http.send(_spec.address_list())
+
+    def add(
+        self,
+        *,
+        title: str,
+        city_id: int | str,
+        district_id: int | str,
+        address: str,
+        location_lat: str,
+        location_lng: str,
+        description: str | None = None,
+        is_default: int | None = None,
+    ) -> Any:
+        """Add an address. Success → ``{"addressId": ...}``. ``city_id`` comes from
+        ``doctors.locations()``; ``district_id`` from ``GET /getConfig`` (``cities[].districts[]``).
+        """
+        return self._http.send(
+            _spec.address_add(
+                title,
+                city_id,
+                district_id,
+                address,
+                location_lat,
+                location_lng,
+                description,
+                is_default,
+            )
+        )
+
+    def update(
+        self,
+        address_id: int | str,
+        *,
+        title: str | None = None,
+        description: str | None = None,
+        city_id: int | str | None = None,
+        district_id: int | str | None = None,
+        address: str | None = None,
+        location_lat: str | None = None,
+        location_lng: str | None = None,
+        is_default: int | None = None,
+    ) -> Any:
+        """Update an address by id. Pass ``is_default=1`` alone to flip the default flag,
+        or any other field to edit it.
+        """
+        return self._http.send(
+            _spec.address_update(
+                address_id,
+                title=title,
+                description=description,
+                city_id=city_id,
+                district_id=district_id,
+                address=address,
+                location_lat=location_lat,
+                location_lng=location_lng,
+                is_default=is_default,
+            )
+        )
+
+    def delete(self, address_id: int | str) -> Any:
+        """Delete an address by id (default/used addresses cannot be deleted)."""
+        return self._http.send(_spec.address_delete(address_id))
 
 
 class PaymentsResource:

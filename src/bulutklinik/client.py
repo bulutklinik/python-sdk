@@ -58,6 +58,7 @@ class BulutklinikClient:
         self.meals = resources.MealsResource(self._http)
         self.laboratory = resources.LaboratoryResource(self._http)
         self.diets = resources.DietsResource(self._http)
+        self.addresses = resources.AddressesResource(self._http)
 
     def request(
         self,
@@ -141,6 +142,7 @@ class AsyncBulutklinikClient:
         self.meals = aresources.AsyncMealsResource(self._http)
         self.laboratory = aresources.AsyncLaboratoryResource(self._http)
         self.diets = aresources.AsyncDietsResource(self._http)
+        self.addresses = aresources.AsyncAddressesResource(self._http)
 
     async def request(
         self,

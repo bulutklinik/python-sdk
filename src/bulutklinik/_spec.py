@@ -20,6 +20,85 @@ class RequestSpec:
     body: dict[str, Any] | None = None
 
 
+# --- auth (registration/password steps that don't mint tokens) ---
+
+
+def confirm_registration_email(
+    verification_code: str, response: str, user_agreements: list[Any] | None
+) -> RequestSpec:
+    body: dict[str, Any] = {"verificationCode": verification_code, "response": response}
+    if user_agreements is not None:
+        body["userAgreements"] = user_agreements
+    return RequestSpec("POST", "/patients/emailConfirmationRegister", "public", body)
+
+
+def verify_registration_social(
+    name: str,
+    surname: str,
+    phone_number: str,
+    password: str,
+    social_type: str,
+    key: str,
+    email: str | None,
+    accept_user_agreement: int,
+    user_agreements: list[Any] | None,
+) -> RequestSpec:
+    body: dict[str, Any] = {
+        "name": name,
+        "surname": surname,
+        "phoneNumber": phone_number,
+        "password": password,
+        "passwordAgain": password,
+        "socialType": social_type,
+        "key": key,
+        "acceptUserAgreement": accept_user_agreement,
+    }
+    if email is not None:
+        body["email"] = email
+    if user_agreements is not None:
+        body["userAgreements"] = user_agreements
+    return RequestSpec("POST", "/patients/verifyAddingNewPatientSocial", "public", body)
+
+
+def register_social(
+    sms_verification_code: str, response: str, user_agreements: list[Any] | None
+) -> RequestSpec:
+    body: dict[str, Any] = {"smsVerificationCode": sms_verification_code, "response": response}
+    if user_agreements is not None:
+        body["userAgreements"] = user_agreements
+    return RequestSpec("POST", "/patients/addNewPatientWithSocial", "public", body)
+
+
+def forgot_password(
+    phone_number: str,
+    birthdate: str | None,
+    recaptcha_v2: str | None,
+    captcha: str | None,
+) -> RequestSpec:
+    body: dict[str, Any] = {"phoneNumber": phone_number}
+    if birthdate is not None:
+        body["birthdate"] = birthdate
+    if recaptcha_v2 is not None:
+        body["g-recaptcha-response-v2"] = recaptcha_v2
+    if captcha is not None:
+        body["captcha"] = captcha
+    return RequestSpec("POST", "/patients/forgotPassword", "public", body)
+
+
+def reset_password(sms_confirm_code: str, response: str, password: str) -> RequestSpec:
+    return RequestSpec(
+        "PUT",
+        "/patients/forgotPassword",
+        "public",
+        {
+            "smsConfirmCode": sms_confirm_code,
+            "response": response,
+            "password": password,
+            "passwordAgain": password,
+        },
+    )
+
+
 # --- doctors ---
 
 
@@ -123,6 +202,85 @@ def add_physical(doctor_id: int | str, appointment_date: str) -> RequestSpec:
 
 def cancel_appointment(event_id: int | str) -> RequestSpec:
     return RequestSpec("DELETE", f"/patients/deleteUserAppointment/{event_id}", "bearer")
+
+
+def user_appointments(page: int | str | None) -> RequestSpec:
+    path = (
+        f"/patients/userAppointments/{page}" if page is not None else "/patients/userAppointments"
+    )
+    return RequestSpec("GET", path, "bearer")
+
+
+def user_reservations() -> RequestSpec:
+    return RequestSpec("GET", "/patients/userReservations", "bearer")
+
+
+# --- addresses ---
+
+
+def address_list() -> RequestSpec:
+    return RequestSpec("GET", "/patients/userAddress", "bearer")
+
+
+def address_add(
+    title: str,
+    city_id: int | str,
+    district_id: int | str,
+    address: str,
+    location_lat: str,
+    location_lng: str,
+    description: str | None,
+    is_default: int | None,
+) -> RequestSpec:
+    body: dict[str, Any] = {
+        "title": title,
+        "cityId": city_id,
+        "districtId": district_id,
+        "address": address,
+        "locationLat": location_lat,
+        "locationLng": location_lng,
+    }
+    if description is not None:
+        body["description"] = description
+    if is_default is not None:
+        body["isDefault"] = is_default
+    return RequestSpec("POST", "/patients/userAddress", "bearer", body)
+
+
+def address_update(
+    address_id: int | str,
+    *,
+    title: str | None = None,
+    description: str | None = None,
+    city_id: int | str | None = None,
+    district_id: int | str | None = None,
+    address: str | None = None,
+    location_lat: str | None = None,
+    location_lng: str | None = None,
+    is_default: int | None = None,
+) -> RequestSpec:
+    body: dict[str, Any] = {"id": address_id}
+    if title is not None:
+        body["title"] = title
+    if description is not None:
+        body["description"] = description
+    if city_id is not None:
+        body["cityId"] = city_id
+    if district_id is not None:
+        body["districtId"] = district_id
+    if address is not None:
+        body["address"] = address
+    if location_lat is not None:
+        body["locationLat"] = location_lat
+    if location_lng is not None:
+        body["locationLng"] = location_lng
+    if is_default is not None:
+        body["isDefault"] = is_default
+    return RequestSpec("PUT", "/patients/userAddress", "bearer", body)
+
+
+def address_delete(address_id: int | str) -> RequestSpec:
+    return RequestSpec("DELETE", "/patients/userAddress", "bearer", {"id": address_id})
 
 
 # --- payments ---
