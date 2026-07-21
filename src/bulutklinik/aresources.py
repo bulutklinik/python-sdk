@@ -305,3 +305,52 @@ class AsyncMealsResource:
         return await self._http.send(
             _spec.analyze_meal(image, portion_size, meal_type, portion_grams, note)
         )
+
+
+class AsyncLaboratoryResource:
+    """Patient laboratory results, the orderable test catalog, and test pre-ordering."""
+
+    def __init__(self, http: AsyncHttpClient) -> None:
+        self._http = http
+
+    async def results(self, page: int | str | None = None) -> Any:
+        """The patient's completed/in-progress lab results. ``page`` defaults to 1
+        server-side; the ``/{page}`` segment is omitted when ``page`` is None. Some
+        result ids carry a ``-lab`` suffix (TMC-lab-ordered tests)."""
+        return await self._http.send(_spec.lab_results(page))
+
+    async def result_detail(self, test_id: str) -> Any:
+        """Detail of a single result. ``test_id`` is a **string** (a plain id such as
+        ``"123"`` or a ``"<id>-lab"`` TMC id) and is interpolated verbatim."""
+        return await self._http.send(_spec.lab_result_detail(test_id))
+
+    async def catalog(self) -> Any:
+        """The orderable test-group catalog."""
+        return await self._http.send(_spec.lab_catalog())
+
+    async def catalog_detail(self, id: int | str) -> Any:
+        """A single catalog group by id."""
+        return await self._http.send(_spec.lab_catalog_detail(id))
+
+    async def order(
+        self, test_id: int | str, address_id: int | str, laboratory_id: int | str
+    ) -> Any:
+        """Pre-order a lab test. All three ids are required; success returns
+        ``{"preOrderId": ...}``."""
+        return await self._http.send(_spec.add_laboratory_test(test_id, address_id, laboratory_id))
+
+
+class AsyncDietsResource:
+    """The patient's diet lists (a dietitian's "Diyet Listesi"). JSON only."""
+
+    def __init__(self, http: AsyncHttpClient) -> None:
+        self._http = http
+
+    async def list(self, page: int | str | None = None) -> Any:
+        """The patient's diet lists. ``page`` defaults to 1 server-side (page size is
+        fixed to 10); the ``/{page}`` segment is omitted when ``page`` is None."""
+        return await self._http.send(_spec.diet_list(page))
+
+    async def detail(self, list_id: int | str) -> Any:
+        """A single diet list (array of meal-time groups) by ``list_id``."""
+        return await self._http.send(_spec.diet_detail(list_id))

@@ -63,6 +63,8 @@ async with AsyncBulutklinikClient(environment="production", client_id="…", cli
 | `client.measures`       | `add_list`, `add`, `update`, `delete`, `last`, `list`, `graph`, `partner_health_information` |
 | `client.skin`           | `analyze` |
 | `client.meals`          | `analyze` |
+| `client.laboratory`     | `results`, `result_detail`, `catalog`, `catalog_detail`, `order` |
+| `client.diets`          | `list`, `detail` |
 
 The async client exposes the same methods (awaitable) under the same names.
 
@@ -115,6 +117,24 @@ meal = client.meals.analyze(
     # note="az yağlı",
 )
 print(meal["status"]["comment"])
+```
+
+## Laboratory & diets
+
+```python
+# Lab results (page optional; omit for page 1). Result ids may carry a "-lab" suffix.
+results = client.laboratory.results()          # or .results(2)
+detail = client.laboratory.result_detail("4821-lab")
+
+# Orderable test catalog, then pre-order (all three ids required)
+catalog = client.laboratory.catalog()
+group = client.laboratory.catalog_detail(7)
+order = client.laboratory.order(test_id=12, address_id=34, laboratory_id=56)
+print(order["preOrderId"])
+
+# Diet lists written by the dietitian (JSON only)
+diets = client.diets.list()                    # or .list(2)
+plan = client.diets.detail(diets["foundDiets"][0]["list_id"])
 ```
 
 ## Errors

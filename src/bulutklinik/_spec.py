@@ -290,3 +290,46 @@ def analyze_meal(
     if note is not None:
         body["note"] = note
     return RequestSpec("POST", "/patients/imageAnalyzeMeal", "bearer", body)
+
+
+# --- laboratory ---
+
+
+def lab_results(page: int | str | None) -> RequestSpec:
+    path = f"/patients/userLabTestList/{page}" if page is not None else "/patients/userLabTestList"
+    return RequestSpec("GET", path, "bearer")
+
+
+def lab_result_detail(test_id: str) -> RequestSpec:
+    return RequestSpec("GET", f"/patients/userLabTestDetail/{test_id}", "bearer")
+
+
+def lab_catalog() -> RequestSpec:
+    return RequestSpec("GET", "/patients/allLaboratoryTests", "bearer")
+
+
+def lab_catalog_detail(id_: int | str) -> RequestSpec:
+    return RequestSpec("GET", f"/patients/laboratoryTestDetail/{id_}", "bearer")
+
+
+def add_laboratory_test(
+    test_id: int | str, address_id: int | str, laboratory_id: int | str
+) -> RequestSpec:
+    return RequestSpec(
+        "POST",
+        "/patients/addNewLaboratoryTest",
+        "bearer",
+        {"testId": test_id, "addressId": address_id, "laboratoryId": laboratory_id},
+    )
+
+
+# --- diets ---
+
+
+def diet_list(page: int | str | None) -> RequestSpec:
+    path = f"/patients/dietLists/{page}" if page is not None else "/patients/dietLists"
+    return RequestSpec("GET", path, "bearer")
+
+
+def diet_detail(list_id: int | str) -> RequestSpec:
+    return RequestSpec("GET", f"/patients/diet/{list_id}", "bearer")

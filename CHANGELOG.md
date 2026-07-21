@@ -4,6 +4,23 @@ All notable changes to `bulutklinik-sdk` are documented here. The format is base
 on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0]
+
+### Added
+
+- `client.laboratory` — patient lab group (DESIGN.md §6.9): `results(page=None)`
+  (`GET /patients/userLabTestList/{page?}`, `/{page}` omitted when None),
+  `result_detail(test_id)` (`GET /patients/userLabTestDetail/{testId}`, `test_id`
+  is a string and interpolated verbatim, e.g. `"4821-lab"`), `catalog()`
+  (`GET /patients/allLaboratoryTests`), `catalog_detail(id)`
+  (`GET /patients/laboratoryTestDetail/{id}`), and `order(test_id, address_id, laboratory_id)`
+  (`POST /patients/addNewLaboratoryTest`; all three ids required).
+- `client.diets` — patient diet group (DESIGN.md §6.10): `list(page=None)`
+  (`GET /patients/dietLists/{page?}`, `/{page}` omitted when None) and
+  `detail(list_id)` (`GET /patients/diet/{listId}`).
+- The async client exposes both groups under the same names (`await client.laboratory.results(...)`,
+  `await client.diets.list(...)`).
+
 ## [0.3.0]
 
 ### Added
