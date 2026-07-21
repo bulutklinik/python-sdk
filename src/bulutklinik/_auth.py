@@ -55,6 +55,37 @@ def register_body(
     }
 
 
+def verify_registration_body(
+    name: str,
+    surname: str,
+    phone_number: str,
+    phone_code: str,
+    email: str,
+    password: str,
+    accept_user_agreement: int,
+    recaptcha_v2: str | None,
+    captcha: str | None,
+    user_agreements: list[Any] | None,
+) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "name": name,
+        "surname": surname,
+        "phoneNumber": phone_number,
+        "phone_code": phone_code,
+        "email": email,
+        "password": password,
+        "passwordAgain": password,
+        "acceptUserAgreement": accept_user_agreement,
+    }
+    if recaptcha_v2 is not None:
+        body["g-recaptcha-response-v2"] = recaptcha_v2
+    if captcha is not None:
+        body["captcha"] = captcha
+    if user_agreements is not None:
+        body["userAgreements"] = user_agreements
+    return body
+
+
 def finish_login(data: Any, token_store: TokenStore) -> LoginResult:
     if isinstance(data, dict) and isinstance(data.get("access_token"), str):
         store_tokens(data, token_store)

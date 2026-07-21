@@ -5,7 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 from . import _spec
-from ._auth import connect_body, finish_login, register_body, store_tokens
+from ._auth import (
+    connect_body,
+    finish_login,
+    register_body,
+    store_tokens,
+    verify_registration_body,
+)
 from ._http import AsyncHttpClient
 from ._spec import RequestSpec
 from .models import LoginResult
@@ -50,6 +56,43 @@ class AsyncAuthResource:
             )
         )
         store_tokens(data, self._http.token_store)
+
+    async def verify_registration(
+        self,
+        *,
+        name: str,
+        surname: str,
+        phone_number: str,
+        phone_code: str,
+        email: str,
+        password: str,
+        accept_user_agreement: int = 1,
+        recaptcha_v2: str | None = None,
+        captcha: str | None = None,
+        user_agreements: list[Any] | None = None,
+    ) -> Any:
+        """Registration step 1: send the verification code, return the ``response`` blob.
+
+        Uses the configured **partner** token (the endpoint is behind ``auth:apiusers``,
+        not public). A CAPTCHA token (``recaptcha_v2`` or ``captcha``), minted by a
+        browser/human, is required. Feed the returned ``response`` (and the code the
+        user receives) into :meth:`register`.
+        """
+        body = verify_registration_body(
+            name,
+            surname,
+            phone_number,
+            phone_code,
+            email,
+            password,
+            accept_user_agreement,
+            recaptcha_v2,
+            captcha,
+            user_agreements,
+        )
+        return await self._http.send(
+            RequestSpec("POST", "/patients/verifyAddingNewPatient", "partner", body)
+        )
 
     async def register(
         self,

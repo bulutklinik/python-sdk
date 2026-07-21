@@ -55,7 +55,7 @@ async with AsyncBulutklinikClient(environment="production", client_id="…", cli
 
 | Group                   | Methods |
 |-------------------------|---------|
-| `client.auth`           | `connect`, `connect_with_two_factor`, `register`, `refresh`, `disconnect` |
+| `client.auth`           | `connect`, `connect_with_two_factor`, `verify_registration`, `register`, `refresh`, `disconnect` |
 | `client.doctors`        | `branches`, `locations`, `quick_search`, `search`, `detail` |
 | `client.slots`          | `schedule` |
 | `client.appointments`   | `reserve_interview`, `add_physical`, `cancel` |
