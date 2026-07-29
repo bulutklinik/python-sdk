@@ -15,6 +15,7 @@ from .errors import (
     ValidationError,
 )
 from .models import LoginResult
+from .partner import AsyncPartnerNamespace, PartnerNamespace
 from .tokens import InMemoryTokenStore, TokenStore
 
 __version__ = "0.6.0"
@@ -22,6 +23,7 @@ __version__ = "0.6.0"
 __all__ = [
     "ApiError",
     "AsyncBulutklinikClient",
+    "AsyncPartnerNamespace",
     "AuthenticationError",
     "AuthorizationError",
     "BulutklinikClient",
@@ -30,6 +32,7 @@ __all__ = [
     "InMemoryTokenStore",
     "LoginResult",
     "NotFoundError",
+    "PartnerNamespace",
     "RateLimitError",
     "TokenStore",
     "TransportError",

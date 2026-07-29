@@ -9,6 +9,7 @@ from . import aresources, resources
 from ._http import AsyncHttpClient, HttpClient
 from ._spec import AuthMode, RequestSpec
 from .config import Environment, resolve_base_url
+from .partner import AsyncPartnerNamespace, PartnerNamespace
 from .tokens import InMemoryTokenStore, TokenStore
 
 
@@ -59,6 +60,9 @@ class BulutklinikClient:
         self.laboratory = resources.LaboratoryResource(self._http)
         self.diets = resources.DietsResource(self._http)
         self.addresses = resources.AddressesResource(self._http)
+        #: Company-scoped partner surface (``/outher``). Uses the configured
+        #: ``partner_token``; data is limited to your own company.
+        self.partner = PartnerNamespace(self._http)
 
     def request(
         self,
@@ -143,6 +147,8 @@ class AsyncBulutklinikClient:
         self.laboratory = aresources.AsyncLaboratoryResource(self._http)
         self.diets = aresources.AsyncDietsResource(self._http)
         self.addresses = aresources.AsyncAddressesResource(self._http)
+        #: Company-scoped partner surface (``/outher``).
+        self.partner = AsyncPartnerNamespace(self._http)
 
     async def request(
         self,
