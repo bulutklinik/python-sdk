@@ -14,9 +14,10 @@ from .errors import (
     TransportError,
     ValidationError,
 )
-from .tokens import InMemoryTokenStore, TokenStore
+from .resources import LoginResult
+from .tokens import InMemoryTokenStore, RefreshTokenStore, TokenStore
 
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 
 __all__ = [
     "ApiError",
@@ -28,8 +29,10 @@ __all__ = [
     "BulutklinikError",
     "Environment",
     "InMemoryTokenStore",
+    "LoginResult",
     "NotFoundError",
     "RateLimitError",
+    "RefreshTokenStore",
     "TokenStore",
     "TransportError",
     "ValidationError",

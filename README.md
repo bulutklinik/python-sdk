@@ -6,13 +6,13 @@ fully typed (`py.typed`), Python 3.10+.
 This is a single-persona SDK: every call runs on the company-scoped `/outher`
 surface with the partner token issued for your integration. You act on the
 patients of **your own company**, and the patient is named inline on each
-request — there is no login and no session. See [`DESIGN.md`](./DESIGN.md) for
+request — there is no patient session. See [`DESIGN.md`](./DESIGN.md) for
 the full wire contract.
 
-> **1.0.0 is a breaking release.** The patient persona (login, registration,
-> payments, AI analysis, address book) has been removed and the former
-> `client.partner.*` namespace was lifted to the client root. See
-> [CHANGELOG.md](./CHANGELOG.md) and DESIGN.md §12 for the migration.
+> **1.1.0 restores `client.auth`.** 1.0.x wrongly assumed the partner token could
+> only be issued out of band; it is in fact minted by `connectApi` from your
+> portal credentials, and it is refreshable. Existing 1.0.x code that passes
+> `partner_token` keeps working. See [CHANGELOG.md](./CHANGELOG.md).
 
 ## Install
 
@@ -64,11 +64,12 @@ async with AsyncBulutklinikClient(environment="production", partner_token="…")
 
 ## Services
 
-28 endpoints across six groups. The async client exposes the same methods
+31 endpoints across seven groups. The async client exposes the same methods
 (awaitable) under the same names.
 
 | Group                 | Methods |
 |-----------------------|---------|
+| `client.auth`         | `connect`, `refresh`, `disconnect` |
 | `client.doctors`      | `search`, `branches`, `detail`, `locations` |
 | `client.slots`        | `schedule` |
 | `client.appointments` | `reserve`, `instant_reserve`, `create`, `create_without_slot`, `cancel_without_slot`, `list`, `info`, `check_doctor` |
@@ -132,48 +133,65 @@ only it.
 
 ## Authentication
 
-The partner token is **issued out of band** through the Bulutklinik Developer
-Platform. It behaves like an API key: there is no login method, and the SDK
-cannot renew it.
+Your portal application issues a **client ID**, a **client secret** and a
+project-specific **service identity**; the password is the one you set when
+registering on the portal. `auth.connect` exchanges them for an access token and
+a refresh token:
 
 ```python
-client = BulutklinikClient(partner_token="…")
+client = BulutklinikClient(client_id="…", client_secret="…")
+
+client.auth.connect(
+    "svc@your-app.bulutklinik",
+    "your-portal-password",
+    login_mode="email",  # default
+)
 ```
 
-The token is read from a token store on **every** request, so a long-running
-process can pick up a newly issued one without being rebuilt. Implement
-`bulutklinik.TokenStore` and pass it via `token_store=…`:
+The granted scope comes from the credentials, not the request — a partner
+application is provisioned with `apiouther`, which is what makes `/outher`
+reachable. Already holding a token? Pass `partner_token=…` and skip the login.
+
+### Refresh
+
+Access tokens last ~30 days, refresh tokens ~130. You do not normally call
+`refresh` yourself: on a `401` / `resultType 4` the SDK refreshes once and retries
+the original request.
+
+```python
+client.auth.refresh()  # only useful to refresh ahead of time
+client.auth.disconnect()  # revokes both tokens and clears the store
+```
+
+If the refresh fails — or there is no refresh token because you supplied a bare
+`partner_token` — the call raises `AuthenticationError` and you should
+`auth.connect` again.
+
+### Token storage
+
+Tokens are read from a token store on **every** request, so a long-running
+process can rotate them without being rebuilt. Implement
+`bulutklinik.RefreshTokenStore` to persist both:
 
 ```python
 class VaultTokenStore:
     def get_token(self) -> str | None: ...
     def set_token(self, token: str | None) -> None: ...
+    def get_refresh_token(self) -> str | None: ...
+    def set_refresh_token(self, token: str | None) -> None: ...
     def clear(self) -> None: ...
 
 
-client = BulutklinikClient(token_store=VaultTokenStore())
-
-# …or rotate the default in-memory store in place:
-client.token_store.set_token(newly_issued_token)
+client = BulutklinikClient(token_store=VaultTokenStore(), client_id="…", client_secret="…")
 ```
 
-Pass `partner_token` **or** `token_store`, not both — the constructor raises
-`ValueError` rather than guessing which one you meant.
+The two refresh methods are **optional**. A plain `TokenStore` — the 1.0.x shape,
+access token only — still works; the SDK then keeps the refresh token in memory,
+so a process restart needs `auth.connect` rather than a refresh.
 
-### When the token expires
-
-Tokens last about 30 days. An expired one comes back as `401` / `resultType 4`;
-the SDK raises `AuthenticationError` and does **not** retry — there is nothing to
-refresh. Recovery is operational: obtain a newly issued token and write it into
-the store.
-
-> This is the one behaviour that changed meaning in 1.0.0. On the patient SDK
-> `resultType 4` meant "the SDK will fix this silently". Here it means the opposite.
-
-An `AuthorizationError` (403) means the credential itself is wrong — either the
-token lacks the `apiouther` scope, or it resolves to a user with no company. The
-company boundary comes from the token, never from request input, so retrying with
-different body parameters will not help.
+An `AuthorizationError` (403) means the credential itself is wrong: either the
+granted scope does not include `apiouther`, or the account has no company. The
+company boundary comes from the token, never from request input.
 
 ## Health measures
 

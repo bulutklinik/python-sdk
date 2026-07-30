@@ -36,9 +36,12 @@ class BulutklinikClient:
 
     Example::
 
-        with BulutklinikClient(environment="test", partner_token="…") as client:
+        with BulutklinikClient(environment="test", client_id="…", client_secret="…") as client:
+            client.auth.connect("svc@your-app.bulutklinik", "…")
             branches = client.doctors.branches()
             latest = client.measures.last({"identityNumber": "12345678901"})
+
+    Already holding a token? Pass ``partner_token`` and skip ``auth.connect``.
     """
 
     def __init__(
@@ -48,6 +51,8 @@ class BulutklinikClient:
         api_version: ApiVersion | str = ApiVersion.V3,
         base_url: str | None = None,
         lang: str = "tr",
+        client_id: str | None = None,
+        client_secret: str | None = None,
         partner_token: str | None = None,
         token_store: TokenStore | None = None,
         timeout: float = 30.0,
@@ -58,12 +63,15 @@ class BulutklinikClient:
         self._http = HttpClient(
             base_url=resolve_base_url(environment, base_url, api_version),
             lang=lang,
+            client_id=client_id,
+            client_secret=client_secret,
             token_store=store,
             client=client,
         )
         #: Write a newly issued partner token here to rotate the credential
         #: without rebuilding the client.
         self.token_store = store
+        self.auth = resources.AuthResource(self._http)
         self.doctors = resources.DoctorsResource(self._http)
         self.slots = resources.SlotsResource(self._http)
         self.appointments = resources.AppointmentsResource(self._http)
@@ -126,6 +134,8 @@ class AsyncBulutklinikClient:
         api_version: ApiVersion | str = ApiVersion.V3,
         base_url: str | None = None,
         lang: str = "tr",
+        client_id: str | None = None,
+        client_secret: str | None = None,
         partner_token: str | None = None,
         token_store: TokenStore | None = None,
         timeout: float = 30.0,
@@ -136,10 +146,13 @@ class AsyncBulutklinikClient:
         self._http = AsyncHttpClient(
             base_url=resolve_base_url(environment, base_url, api_version),
             lang=lang,
+            client_id=client_id,
+            client_secret=client_secret,
             token_store=store,
             client=client,
         )
         self.token_store = store
+        self.auth = aresources.AsyncAuthResource(self._http)
         self.doctors = aresources.AsyncDoctorsResource(self._http)
         self.slots = aresources.AsyncSlotsResource(self._http)
         self.appointments = aresources.AsyncAppointmentsResource(self._http)

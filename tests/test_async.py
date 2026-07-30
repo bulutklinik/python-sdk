@@ -32,7 +32,7 @@ async def test_async_unwraps_and_sends_headers() -> None:
     assert str(requests[0].url) == f"{BASE}/outher/lastMeasures"
 
 
-async def test_async_expired_token_is_not_retried() -> None:
+async def test_async_expired_token_without_a_refresh_token_is_not_retried() -> None:
     attempts = {"n": 0}
 
     def responder(_: httpx.Request) -> httpx.Response:
@@ -40,15 +40,58 @@ async def test_async_expired_token_is_not_retried() -> None:
         return httpx.Response(401, json={"resultType": 4})
 
     transport, _requests = recording_transport(responder)
-    store = InMemoryTokenStore("expired")
+    store = InMemoryTokenStore("expired")  # access token only — nothing to refresh with
     async with AsyncBulutklinikClient(
         environment="test", transport=transport, token_store=store
     ) as client:
-        with pytest.raises(AuthenticationError, match="cannot refresh it"):
+        with pytest.raises(AuthenticationError, match="could not be refreshed"):
             await client.measures.last(REF)
 
     assert attempts["n"] == 1
     assert store.get_token() == "expired"
+
+
+async def test_async_refreshes_once_then_retries() -> None:
+    state = {"data_calls": 0}
+
+    def responder(req: httpx.Request) -> httpx.Response:
+        if req.url.path.endswith("/general/refreshApi"):
+            return httpx.Response(
+                200, json={"resultType": 0, "data": {"access_token": "AT2", "refresh_token": "RT2"}}
+            )
+        state["data_calls"] += 1
+        if state["data_calls"] == 1:
+            return httpx.Response(401, json={"resultType": 4})
+        return httpx.Response(200, json={"resultType": 0, "data": {"ok": True}})
+
+    transport, _requests = recording_transport(responder)
+    store = InMemoryTokenStore("AT", "RT")
+    async with AsyncBulutklinikClient(
+        environment="test",
+        transport=transport,
+        token_store=store,
+        client_id="cid",
+        client_secret="csecret",
+    ) as client:
+        assert await client.measures.last(REF) == {"ok": True}
+
+    assert store.get_token() == "AT2"
+
+
+async def test_async_auth_connect_stores_tokens() -> None:
+    transport, requests = recording_transport(
+        lambda req: httpx.Response(
+            200, json={"resultType": 0, "data": {"access_token": "AT", "refresh_token": "RT"}}
+        )
+    )
+    async with AsyncBulutklinikClient(
+        environment="test", transport=transport, client_id="cid", client_secret="csecret"
+    ) as client:
+        result = await client.auth.connect("svc", "p")
+        assert result.two_factor_required is False
+        assert client.token_store.get_token() == "AT"
+
+    assert str(requests[0].url) == f"{BASE}/general/connectApi"
 
 
 async def test_async_request_escape_hatch_defaults_to_partner() -> None:

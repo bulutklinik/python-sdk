@@ -158,7 +158,7 @@ def test_numeric_error_type_does_not_crash() -> None:
         client.doctors.branches()
 
 
-def test_expired_token_is_surfaced_without_retrying() -> None:
+def test_expired_token_without_a_refresh_token_is_surfaced() -> None:
     attempts = {"n": 0}
 
     def responder(_: httpx.Request) -> httpx.Response:
@@ -168,12 +168,11 @@ def test_expired_token_is_surfaced_without_retrying() -> None:
     store = InMemoryTokenStore("expired")
     client, _ = client_with(responder, partner_token=None, token_store=store)
 
-    with pytest.raises(AuthenticationError, match="cannot refresh it"):
+    with pytest.raises(AuthenticationError, match="could not be refreshed"):
         client.measures.last(REF)
 
     assert attempts["n"] == 1
-    # An expired token is kept: the caller may want to inspect it while
-    # installing the replacement. Only a revoked one is cleared.
+    # The dead access token is kept; only a revoked session (resultType 2) clears.
     assert store.get_token() == "expired"
 
 

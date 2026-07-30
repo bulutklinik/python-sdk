@@ -32,6 +32,45 @@ class RequestSpec:
     body: dict[str, Any] | None = None
 
 
+# --- auth ---
+
+
+def connect(
+    client_id: str, client_secret: str, api_user_name: str, api_user_password: str, login_mode: str
+) -> RequestSpec:
+    return RequestSpec(
+        "POST",
+        "/general/connectApi",
+        "public",
+        {
+            "apiClientId": client_id,
+            "apiSecretKey": client_secret,
+            "apiUserName": api_user_name,
+            "apiUserPassword": api_user_password,
+            "loginMode": login_mode,
+        },
+    )
+
+
+def refresh(refresh_token: str, client_id: str, client_secret: str) -> RequestSpec:
+    return RequestSpec(
+        "POST",
+        "/general/refreshApi",
+        "public",
+        {
+            "refreshToken": refresh_token,
+            "clientId": client_id,
+            "clientSecretKey": client_secret,
+        },
+    )
+
+
+def disconnect() -> RequestSpec:
+    # Empty body on purpose: the endpoint's optional `device` mapping has no
+    # default branch server-side, and there is no partner use for it.
+    return RequestSpec("POST", "/general/disconnectApi", "partner", {})
+
+
 # --- doctors ---
 
 

@@ -2,7 +2,7 @@
 
 Every call runs on the company-scoped ``/outher`` surface with the partner token
 issued for your integration: you act on the patients of **your own company**, and
-the patient is named inline on each request — there is no login and no session.
+the patient is named inline on each request — there is no patient session.
 
 Sync and async resources share the same :mod:`._spec` builders, so request shapes
 can never drift between them.
@@ -10,10 +10,11 @@ can never drift between them.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from . import _spec
-from ._http import HttpClient
+from ._http import AsyncHttpClient, HttpClient
 
 #: ``patient`` shapes accepted by the endpoints below:
 #:   read  -> {"identityNumber": str | None, "phoneNumber": str | None}
@@ -27,6 +28,30 @@ Patient = dict[str, Any]
 # ``list``, which shadows the builtin inside the class body, so ``list[...]``
 # cannot be spelled in those signatures.
 MeasureRows = list[dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class LoginResult:
+    """Result of ``auth.connect``.
+
+    When ``two_factor_required`` is True no tokens were stored and
+    ``two_factor_response`` carries the server's challenge blob.
+    """
+
+    two_factor_required: bool
+    two_factor_response: str | None = None
+    password_policy: dict[str, Any] | None = None
+
+
+def _finish_login(http: HttpClient | AsyncHttpClient, data: Any) -> LoginResult:
+    """Store the tokens from a connect response, or report the 2FA challenge."""
+    if isinstance(data, dict) and isinstance(data.get("access_token"), str):
+        refresh = data.get("refresh_token")
+        http.set_tokens(data["access_token"], refresh if isinstance(refresh, str) else None)
+        policy = data.get("password_policy")
+        return LoginResult(False, None, policy if isinstance(policy, dict) else None)
+    challenge = data.get("response") if isinstance(data, dict) else None
+    return LoginResult(True, challenge if isinstance(challenge, str) else None)
 
 
 class DoctorsResource:
@@ -286,3 +311,54 @@ class MeasuresResource:
             :meth:`add_list`.
         """
         return self._http.send(_spec.health_information(identity, phone_number, data))
+
+
+class AuthResource:
+    """Token lifecycle.
+
+    The Developer Platform issues a **client id**, a **client secret** and a
+    project-specific **service identity** per approved application; the password
+    is the one set when registering on the portal. :meth:`connect` exchanges
+    those for an access + refresh token pair, which every other method then uses.
+    """
+
+    def __init__(self, http: HttpClient) -> None:
+        self._http = http
+
+    def connect(
+        self,
+        api_user_name: str,
+        api_user_password: str,
+        *,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        login_mode: str = "email",
+    ) -> LoginResult:
+        """Log in and store the resulting tokens.
+
+        ``client_id`` / ``client_secret`` fall back to the values the client was
+        constructed with. If the account has SMS 2FA enabled the API returns a
+        challenge instead of tokens; the result reports ``two_factor_required``
+        rather than raising.
+        """
+        cid = client_id or self._http.client_id
+        secret = client_secret or self._http.client_secret
+        if not cid or not secret:
+            raise ValueError(
+                "client_id and client_secret are required - pass them to connect() "
+                "or to the client constructor."
+            )
+        data = self._http.send(
+            _spec.connect(cid, secret, api_user_name, api_user_password, login_mode)
+        )
+        return _finish_login(self._http, data)
+
+    def refresh(self) -> None:
+        """Rotate both tokens. The transport already does this automatically on a
+        ``401`` / ``resultType 4``; calling it by hand refreshes ahead of time."""
+        self._http.refresh()
+
+    def disconnect(self) -> None:
+        """Revoke the access token and its refresh tokens, then clear the store."""
+        self._http.send(_spec.disconnect())
+        self._http.clear_tokens()

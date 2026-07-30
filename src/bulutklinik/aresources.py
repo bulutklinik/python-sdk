@@ -10,15 +10,17 @@ from typing import Any
 
 from . import _spec
 from ._http import AsyncHttpClient
-from .resources import MeasureRows, Patient
+from .resources import LoginResult, MeasureRows, Patient, _finish_login
 
 __all__ = [
     "AsyncAppointmentsResource",
+    "AsyncAuthResource",
     "AsyncDietsResource",
     "AsyncDoctorsResource",
     "AsyncLaboratoryResource",
     "AsyncMeasuresResource",
     "AsyncSlotsResource",
+    "LoginResult",
     "MeasureRows",
     "Patient",
 ]
@@ -205,3 +207,38 @@ class AsyncMeasuresResource:
     ) -> Any:
         """.. deprecated:: Prefer :meth:`add_list`; see the sync counterpart."""
         return await self._http.send(_spec.health_information(identity, phone_number, data))
+
+
+class AsyncAuthResource:
+    """Async counterpart of :class:`bulutklinik.resources.AuthResource`."""
+
+    def __init__(self, http: AsyncHttpClient) -> None:
+        self._http = http
+
+    async def connect(
+        self,
+        api_user_name: str,
+        api_user_password: str,
+        *,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        login_mode: str = "email",
+    ) -> LoginResult:
+        cid = client_id or self._http.client_id
+        secret = client_secret or self._http.client_secret
+        if not cid or not secret:
+            raise ValueError(
+                "client_id and client_secret are required - pass them to connect() "
+                "or to the client constructor."
+            )
+        data = await self._http.send(
+            _spec.connect(cid, secret, api_user_name, api_user_password, login_mode)
+        )
+        return _finish_login(self._http, data)
+
+    async def refresh(self) -> None:
+        await self._http.refresh()
+
+    async def disconnect(self) -> None:
+        await self._http.send(_spec.disconnect())
+        self._http.clear_tokens()

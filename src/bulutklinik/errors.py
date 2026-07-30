@@ -41,7 +41,7 @@ class ValidationError(ApiError):
 
 
 class AuthenticationError(ApiError):
-    """401, a revoked token (result_type 2), or an expired one (result_type 4)."""
+    """401 after a failed or impossible refresh, or a revoked session (result_type 2)."""
 
 
 class AuthorizationError(ApiError):
@@ -83,12 +83,12 @@ def create_api_error(
 
     if result_type == 2:
         return AuthenticationError(message, **kwargs)
-    # `result_type 4` used to trigger a silent refresh. On the partner surface
-    # there is nothing to refresh, so say what the caller actually has to do.
+    # `result_type 4` reaches here only when the silent refresh could not run or
+    # failed — the transport retries first (DESIGN.md 5.4).
     if result_type == 4:
         return AuthenticationError(
-            f"{message} The partner token is expired or invalid — install a newly "
-            "issued token; the SDK cannot refresh it.",
+            f"{message} The access token is expired and could not be refreshed — "
+            "call auth.connect again.",
             **kwargs,
         )
     if (isinstance(error_type, str) and error_type.lower() == "validation") or http_status == 422:
