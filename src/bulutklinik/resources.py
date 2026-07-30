@@ -42,7 +42,12 @@ class DoctorsResource:
         current_page: int = 1,
         order_params: list[str] | None = None,
     ) -> Any:
-        """``order_params``: ``name`` / ``order`` / ``slot``."""
+        """``order_params``: ``name`` / ``order`` / ``slot``.
+
+        ``search_params`` must carry at least one key: the server rule is
+        ``required|array`` and PHP's ``required`` rejects an empty array, so ``{}``
+        is a validation error rather than an unfiltered search.
+        """
         return self._http.send(_spec.doctor_search(search_params, current_page, order_params))
 
     def branches(self) -> Any:

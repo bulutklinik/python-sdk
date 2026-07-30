@@ -197,9 +197,12 @@ client.measures.graph(ref, "tension", 2)     # period 2 = weekly
 `measures.health_information` is the legacy `teusan` bulk endpoint, kept for
 existing integrations: it needs the `teusan` scope instead of `apiouther`, takes
 a flat `identity` + `phone_number` instead of `patient`, and writes into the
-shared consumer tenant. The API currently matches on `phone_number` only (a
-server-side bug nulls `identity` during validation); pass both for forward
-compatibility. Prefer `add_list` for anything new.
+shared consumer tenant. Its patient matching is an **OR**, and it is loose: the lookup is
+`identity OR phoneNumber` against the *global* user table and takes the first
+row, so a phone number alone can resolve someone whose TCKN differs from the one
+you sent. Send both, but do not assume they are checked as a pair — the
+`apiouther` reads above do the opposite, scoping to your company and failing
+closed on ambiguity. Prefer `add_list` for anything new.
 
 ## Laboratory & diets
 
