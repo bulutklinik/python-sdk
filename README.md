@@ -27,7 +27,7 @@ from bulutklinik import BulutklinikClient
 
 with BulutklinikClient(
     environment="production",  # "production" | "test" | "local"
-    api_version="v3",          # "v3" (default) | "v4"
+    api_version="v3",  # "v3" (default) | "v4"
     partner_token="…",
 ) as client:
     # 1) Find a doctor you can book
@@ -150,6 +150,7 @@ class VaultTokenStore:
     def set_token(self, token: str | None) -> None: ...
     def clear(self) -> None: ...
 
+
 client = BulutklinikClient(token_store=VaultTokenStore())
 
 # …or rotate the default in-memory store in place:
@@ -180,14 +181,22 @@ different body parameters will not help.
 ref = {"identityNumber": "12345678901"}
 
 # Write several measurements at once (max 200 per call, one transaction)
-client.measures.add_list(patient, [
-    {"type": "tension", "date_time": "2026-06-17 09:30", "hypertension": 120, "hypotension": 80},
-    {"type": "glucose", "date_time": "2026-06-17 09:35", "glucose": 95, "glucose_type": 0},
-])
+client.measures.add_list(
+    patient,
+    [
+        {
+            "type": "tension",
+            "date_time": "2026-06-17 09:30",
+            "hypertension": 120,
+            "hypotension": 80,
+        },
+        {"type": "glucose", "date_time": "2026-06-17 09:35", "glucose": 95, "glucose_type": 0},
+    ],
+)
 
 client.measures.last(ref)
 client.measures.list(ref, "glucose", 1, 0)  # glucose_type 0=fasting, 1=postprandial
-client.measures.graph(ref, "tension", 2)     # period 2 = weekly
+client.measures.graph(ref, "tension", 2)  # period 2 = weekly
 ```
 
 > Measurements are written to **your own company**. A value you write does not
@@ -214,7 +223,7 @@ catalog = client.laboratory.catalog()
 group = client.laboratory.catalog_detail(7)
 
 # Results for a patient in your company. Ids may carry a "-lab" suffix; pass them back verbatim.
-results = client.laboratory.results(ref)          # or .results(ref, 2)
+results = client.laboratory.results(ref)  # or .results(ref, 2)
 detail = client.laboratory.result_detail(ref, "4821-lab")
 
 # Diet lists written by a dietitian. Page size is fixed to 20 server-side.
