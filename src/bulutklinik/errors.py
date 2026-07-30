@@ -41,11 +41,14 @@ class ValidationError(ApiError):
 
 
 class AuthenticationError(ApiError):
-    """401, a logout (result_type 2), or a failed token refresh."""
+    """401, a revoked token (result_type 2), or an expired one (result_type 4)."""
 
 
 class AuthorizationError(ApiError):
-    """403 — authenticated but not permitted / out of scope."""
+    """403 — the token authenticated but is not permitted. Either it lacks the
+    ``apiouther`` scope or it resolves to a user with no company. The company
+    boundary comes from the token, never from request input, so retrying with
+    different body parameters will not help."""
 
 
 class NotFoundError(ApiError):
@@ -80,6 +83,14 @@ def create_api_error(
 
     if result_type == 2:
         return AuthenticationError(message, **kwargs)
+    # `result_type 4` used to trigger a silent refresh. On the partner surface
+    # there is nothing to refresh, so say what the caller actually has to do.
+    if result_type == 4:
+        return AuthenticationError(
+            f"{message} The partner token is expired or invalid — install a newly "
+            "issued token; the SDK cannot refresh it.",
+            **kwargs,
+        )
     if (isinstance(error_type, str) and error_type.lower() == "validation") or http_status == 422:
         return ValidationError(message, **kwargs)
 

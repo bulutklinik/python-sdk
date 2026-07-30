@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bulutklinik-sdk"
-version = "0.6.0"
-description = "Official Bulutklinik API SDK for Python"
+version = "1.0.0"
+description = "Official Bulutklinik partner API SDK for Python"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"

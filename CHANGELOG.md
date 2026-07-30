@@ -4,6 +4,54 @@ All notable changes to `bulutklinik-sdk` are documented here. The format is base
 on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0]
+
+The SDK becomes **partner-only**. Everything that required a patient login is
+gone; the company-scoped `/outher` surface that shipped under `client.partner.*`
+in 0.6.0 is now the client root. See `DESIGN.md` §12 for the full migration.
+
+### Changed — BREAKING
+
+- **`client.partner.<group>` → `client.<group>`.** The six partner groups
+  (`doctors`, `slots`, `appointments`, `measures`, `laboratory`, `diets`) moved to
+  the root on both the sync and async clients. Their paths, bodies and behaviour
+  are unchanged — this is a rename. Resource classes lost the `Partner` prefix
+  (`PartnerDoctorsResource` → `DoctorsResource`, `AsyncPartnerDoctorsResource` →
+  `AsyncDoctorsResource`); `PartnerNamespace` / `AsyncPartnerNamespace` are gone.
+- **`TokenStore` now holds one partner token**: `get_token` / `set_token` /
+  `clear` replace `get_access_token` / `get_refresh_token` / `set_tokens`.
+  `InMemoryTokenStore` takes the token as its single argument.
+- **`partner_token` is now the client's credential** and is required for every
+  call. Passing both `partner_token` and `token_store` raises `ValueError` at
+  construction rather than silently picking one.
+- **No silent refresh.** A `401` / `resultType 4` raises `AuthenticationError`
+  with no retry — a partner token is issued out of band and cannot be renewed
+  from here. Install a newly issued token in the token store instead.
+- **A missing token fails before dispatch** with `AuthenticationError`, rather
+  than sending an anonymous request that returns an opaque `401`.
+- **Escape hatch `auth` defaults to `"partner"`**; the `"bearer"` mode no longer
+  exists. `"public"` remains, for unauthenticated endpoints outside the surface.
+- `_BASE_URLS` → `API_ROOTS` (now version-less); `resolve_base_url` takes an
+  `api_version` argument.
+- `measures.partner_health_information` → `measures.health_information`.
+- `doctors.search` no longer accepts `other_params` / `per_page_limit`, and
+  `order_params` no longer accepts `point` — the `/outher` search has neither.
+
+### Added
+
+- **`api_version="v3" | "v4"`** client option (plus an `ApiVersion` enum). Every
+  path is version-agnostic, so targeting v4 is configuration, not a code change.
+  Default stays `v3`.
+
+### Removed
+
+- `client.auth` (all 11 methods), `client.payments` (5), `client.skin`,
+  `client.meals`, `client.addresses` (4) — no company-scoped equivalent exists.
+- The patient-persona `doctors` / `slots` / `appointments` / `measures` /
+  `laboratory` / `diets` that lived at the root in 0.6.0.
+- `client_id` / `client_secret` client options.
+- The `LoginResult` model and the `bulutklinik.models` module.
+
 ## [0.6.0]
 
 ### Added

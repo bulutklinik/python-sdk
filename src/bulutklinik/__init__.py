@@ -1,9 +1,9 @@
-"""Official Bulutklinik API SDK for Python."""
+"""Official Bulutklinik partner API SDK for Python."""
 
 from __future__ import annotations
 
 from .client import AsyncBulutklinikClient, BulutklinikClient
-from .config import Environment
+from .config import ApiVersion, Environment
 from .errors import (
     ApiError,
     AuthenticationError,
@@ -14,25 +14,21 @@ from .errors import (
     TransportError,
     ValidationError,
 )
-from .models import LoginResult
-from .partner import AsyncPartnerNamespace, PartnerNamespace
 from .tokens import InMemoryTokenStore, TokenStore
 
-__version__ = "0.6.0"
+__version__ = "1.0.0"
 
 __all__ = [
     "ApiError",
+    "ApiVersion",
     "AsyncBulutklinikClient",
-    "AsyncPartnerNamespace",
     "AuthenticationError",
     "AuthorizationError",
     "BulutklinikClient",
     "BulutklinikError",
     "Environment",
     "InMemoryTokenStore",
-    "LoginResult",
     "NotFoundError",
-    "PartnerNamespace",
     "RateLimitError",
     "TokenStore",
     "TransportError",

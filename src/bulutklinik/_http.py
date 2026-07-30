@@ -1,5 +1,10 @@
 """Transport core. Pure helpers are shared; the sync and async clients differ
-only in how they perform I/O and the refresh call."""
+only in how they perform I/O.
+
+There is no silent refresh: a partner token is issued out of band and cannot be
+renewed from here, so an expired one (``401`` / ``resultType 4``) surfaces as an
+``AuthenticationError`` instead of being retried.
+"""
 
 from __future__ import annotations
 
@@ -13,14 +18,10 @@ from .errors import ApiError, AuthenticationError, TransportError, create_api_er
 from .tokens import TokenStore
 
 
-def _build_headers(
-    spec: RequestSpec, lang: str, access_token: str | None, partner_token: str | None
-) -> dict[str, str]:
+def _build_headers(spec: RequestSpec, lang: str, token: str | None) -> dict[str, str]:
     headers = {"Accept": "application/json", "lang": lang}
-    if spec.auth == "bearer" and access_token:
-        headers["Authorization"] = f"Bearer {access_token}"
-    elif spec.auth == "partner" and partner_token:
-        headers["Authorization"] = f"Bearer {partner_token}"
+    if spec.auth == "partner" and token:
+        headers["Authorization"] = f"Bearer {token}"
     return headers
 
 
@@ -42,8 +43,14 @@ def _is_success(status: int, envelope: dict[str, Any]) -> bool:
     return 200 <= status < 300 and envelope.get("resultType") == 0
 
 
-def _is_expired(status: int, envelope: dict[str, Any]) -> bool:
-    return status == 401 or envelope.get("resultType") == 4
+def _require_token(spec: RequestSpec, token: str | None) -> str | None:
+    """Fail before dispatch when a partner call has no credential — sending it
+    anyway would only come back as an opaque 401."""
+    if spec.auth == "partner" and not token:
+        raise AuthenticationError(
+            "No partner token configured.", http_status=0, method=spec.method, path=spec.path
+        )
+    return token
 
 
 def _to_error(
@@ -70,54 +77,37 @@ def _to_error(
 
 
 class HttpClient:
-    """Synchronous transport: unwraps the envelope, maps errors, and silently
-    refreshes + retries once on a 401 / ``resultType 4``."""
+    """Synchronous transport: unwraps the envelope and maps errors."""
 
     def __init__(
         self,
         *,
         base_url: str,
         lang: str,
-        client_id: str | None,
-        client_secret: str | None,
-        partner_token: str | None,
         token_store: TokenStore,
         client: httpx.Client,
     ) -> None:
         self.base_url = base_url
         self.lang = lang
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.partner_token = partner_token
         self.token_store = token_store
         self._client = client
 
-    def send(self, spec: RequestSpec, *, _is_retry: bool = False) -> Any:
+    def send(self, spec: RequestSpec) -> Any:
         status, envelope, retry_after = self._dispatch(spec)
         if _is_success(status, envelope):
             return envelope.get("data")
-        if (
-            spec.auth == "bearer"
-            and _is_expired(status, envelope)
-            and not _is_retry
-            and self._try_refresh()
-        ):
-            return self.send(spec, _is_retry=True)
+        # A revoked token is worth forgetting; an expired one is not, since the
+        # caller may want to inspect it while installing a replacement.
         if envelope.get("resultType") == 2:
             self.token_store.clear()
         raise _to_error(spec, status, envelope, retry_after)
-
-    def refresh(self) -> None:
-        if not self._try_refresh():
-            raise AuthenticationError("Token refresh failed", http_status=401)
 
     def close(self) -> None:
         self._client.close()
 
     def _dispatch(self, spec: RequestSpec) -> tuple[int, dict[str, Any], str | None]:
-        headers = _build_headers(
-            spec, self.lang, self.token_store.get_access_token(), self.partner_token
-        )
+        token = _require_token(spec, self.token_store.get_token())
+        headers = _build_headers(spec, self.lang, token)
         try:
             response = self._client.request(
                 spec.method, self.base_url + spec.path, headers=headers, json=_json_body(spec)
@@ -130,38 +120,6 @@ class HttpClient:
             response.headers.get("retry-after"),
         )
 
-    def _try_refresh(self) -> bool:
-        refresh_token = self.token_store.get_refresh_token()
-        if not refresh_token or not self.client_id or not self.client_secret:
-            return False
-        spec = RequestSpec(
-            "POST",
-            "/general/refreshApi",
-            "public",
-            {
-                "refreshToken": refresh_token,
-                "clientId": self.client_id,
-                "clientSecretKey": self.client_secret,
-            },
-        )
-        try:
-            status, envelope, _ = self._dispatch(spec)
-        except TransportError:
-            return False
-        data = envelope.get("data")
-        if (
-            not _is_success(status, envelope)
-            or not isinstance(data, dict)
-            or not isinstance(data.get("access_token"), str)
-        ):
-            self.token_store.clear()
-            return False
-        new_refresh = (
-            data["refresh_token"] if isinstance(data.get("refresh_token"), str) else refresh_token
-        )
-        self.token_store.set_tokens(data["access_token"], new_refresh)
-        return True
-
 
 class AsyncHttpClient:
     """Asynchronous transport — same behavior as :class:`HttpClient`."""
@@ -171,46 +129,28 @@ class AsyncHttpClient:
         *,
         base_url: str,
         lang: str,
-        client_id: str | None,
-        client_secret: str | None,
-        partner_token: str | None,
         token_store: TokenStore,
         client: httpx.AsyncClient,
     ) -> None:
         self.base_url = base_url
         self.lang = lang
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.partner_token = partner_token
         self.token_store = token_store
         self._client = client
 
-    async def send(self, spec: RequestSpec, *, _is_retry: bool = False) -> Any:
+    async def send(self, spec: RequestSpec) -> Any:
         status, envelope, retry_after = await self._dispatch(spec)
         if _is_success(status, envelope):
             return envelope.get("data")
-        if (
-            spec.auth == "bearer"
-            and _is_expired(status, envelope)
-            and not _is_retry
-            and await self._try_refresh()
-        ):
-            return await self.send(spec, _is_retry=True)
         if envelope.get("resultType") == 2:
             self.token_store.clear()
         raise _to_error(spec, status, envelope, retry_after)
-
-    async def refresh(self) -> None:
-        if not await self._try_refresh():
-            raise AuthenticationError("Token refresh failed", http_status=401)
 
     async def aclose(self) -> None:
         await self._client.aclose()
 
     async def _dispatch(self, spec: RequestSpec) -> tuple[int, dict[str, Any], str | None]:
-        headers = _build_headers(
-            spec, self.lang, self.token_store.get_access_token(), self.partner_token
-        )
+        token = _require_token(spec, self.token_store.get_token())
+        headers = _build_headers(spec, self.lang, token)
         try:
             response = await self._client.request(
                 spec.method, self.base_url + spec.path, headers=headers, json=_json_body(spec)
@@ -222,35 +162,3 @@ class AsyncHttpClient:
             _parse_envelope(response.text),
             response.headers.get("retry-after"),
         )
-
-    async def _try_refresh(self) -> bool:
-        refresh_token = self.token_store.get_refresh_token()
-        if not refresh_token or not self.client_id or not self.client_secret:
-            return False
-        spec = RequestSpec(
-            "POST",
-            "/general/refreshApi",
-            "public",
-            {
-                "refreshToken": refresh_token,
-                "clientId": self.client_id,
-                "clientSecretKey": self.client_secret,
-            },
-        )
-        try:
-            status, envelope, _ = await self._dispatch(spec)
-        except TransportError:
-            return False
-        data = envelope.get("data")
-        if (
-            not _is_success(status, envelope)
-            or not isinstance(data, dict)
-            or not isinstance(data.get("access_token"), str)
-        ):
-            self.token_store.clear()
-            return False
-        new_refresh = (
-            data["refresh_token"] if isinstance(data.get("refresh_token"), str) else refresh_token
-        )
-        self.token_store.set_tokens(data["access_token"], new_refresh)
-        return True

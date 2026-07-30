@@ -8,88 +8,95 @@ import httpx
 from . import aresources, resources
 from ._http import AsyncHttpClient, HttpClient
 from ._spec import AuthMode, RequestSpec
-from .config import Environment, resolve_base_url
-from .partner import AsyncPartnerNamespace, PartnerNamespace
+from .config import ApiVersion, Environment, resolve_base_url
 from .tokens import InMemoryTokenStore, TokenStore
+
+_BOTH_CREDENTIALS = (
+    "Pass either partner_token or token_store, not both. Seed your own store "
+    "with the token if you need custom persistence."
+)
+
+
+def _resolve_store(partner_token: str | None, token_store: TokenStore | None) -> TokenStore:
+    # Either the literal or the store is the source of truth for the credential.
+    # Guessing which one the caller meant is how credential bugs get shipped.
+    if partner_token is not None and token_store is not None:
+        raise ValueError(_BOTH_CREDENTIALS)
+    return token_store if token_store is not None else InMemoryTokenStore(partner_token)
 
 
 class BulutklinikClient:
-    """Synchronous Bulutklinik API client. Construct once and reuse; service
-    groups are exposed as attributes. Usable as a context manager.
+    """Synchronous Bulutklinik partner API client. Construct once and reuse;
+    service groups are exposed as attributes. Usable as a context manager.
+
+    Every call runs on the company-scoped ``/outher`` surface with the partner
+    token issued for your integration: you act on the patients of **your own
+    company**, and the patient is named inline on each request — there is no
+    login and no session.
 
     Example::
 
-        with BulutklinikClient(environment="test", client_id="…", client_secret="…") as client:
-            client.auth.connect("patient@example.com", "•••", "email")
-            result = client.doctors.quick_search("kardiyo")
+        with BulutklinikClient(environment="test", partner_token="…") as client:
+            branches = client.doctors.branches()
+            latest = client.measures.last({"identityNumber": "12345678901"})
     """
 
     def __init__(
         self,
         *,
         environment: Environment | str = Environment.PRODUCTION,
+        api_version: ApiVersion | str = ApiVersion.V3,
         base_url: str | None = None,
         lang: str = "tr",
-        client_id: str | None = None,
-        client_secret: str | None = None,
         partner_token: str | None = None,
         token_store: TokenStore | None = None,
         timeout: float = 30.0,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
-        store: TokenStore = token_store or InMemoryTokenStore()
+        store = _resolve_store(partner_token, token_store)
         client = httpx.Client(timeout=timeout, transport=transport)
         self._http = HttpClient(
-            base_url=resolve_base_url(environment, base_url),
+            base_url=resolve_base_url(environment, base_url, api_version),
             lang=lang,
-            client_id=client_id,
-            client_secret=client_secret,
-            partner_token=partner_token,
             token_store=store,
             client=client,
         )
+        #: Write a newly issued partner token here to rotate the credential
+        #: without rebuilding the client.
         self.token_store = store
-        self.auth = resources.AuthResource(self._http)
         self.doctors = resources.DoctorsResource(self._http)
         self.slots = resources.SlotsResource(self._http)
         self.appointments = resources.AppointmentsResource(self._http)
-        self.payments = resources.PaymentsResource(self._http)
         self.measures = resources.MeasuresResource(self._http)
-        self.skin = resources.SkinResource(self._http)
-        self.meals = resources.MealsResource(self._http)
         self.laboratory = resources.LaboratoryResource(self._http)
         self.diets = resources.DietsResource(self._http)
-        self.addresses = resources.AddressesResource(self._http)
-        #: Company-scoped partner surface (``/outher``). Uses the configured
-        #: ``partner_token``; data is limited to your own company.
-        self.partner = PartnerNamespace(self._http)
 
     def request(
         self,
         method: str,
         path: str,
         *,
-        auth: AuthMode = "bearer",
+        auth: AuthMode = "partner",
         body: dict[str, Any] | None = None,
     ) -> Any:
         """Escape hatch: call any Bulutklinik API endpoint that does not yet have
         a typed resource method.
 
         The request still goes through the shared transport, so default headers,
-        the chosen ``auth`` mode (``"bearer"`` by default), silent token refresh +
-        retry, envelope unwrapping and the typed error hierarchy all apply. Returns
-        the unwrapped ``data`` payload. Prefer a typed resource method when one
-        exists; reach for ``request`` only for the gaps.
+        the chosen ``auth`` mode (``"partner"`` by default), envelope unwrapping
+        and the typed error hierarchy all apply. Returns the unwrapped ``data``
+        payload. Prefer a typed resource method when one exists.
 
         :param method: HTTP method (``"GET"`` / ``"POST"`` / ``"PUT"`` / ``"DELETE"``).
-        :param path: Path relative to the configured base URL, e.g. ``"/patients/allBranches"``.
-        :param auth: Auth mode — ``"public"`` / ``"bearer"`` (default) / ``"partner"``.
+        :param path: Path relative to the configured base URL, e.g. ``"/outher/branches"``.
+        :param auth: Auth mode — ``"partner"`` (default) / ``"public"``.
         :param body: Optional JSON payload (a dict); omitted on ``GET``.
 
         Example::
 
-            branches = client.request("GET", "/patients/allBranches")
-            created = client.request("POST", "/patients/someNewEndpoint", body={"foo": "bar"})
+            branches = client.request("GET", "/outher/branches")
+            # "public" reaches unauthenticated endpoints outside the partner surface
+            config = client.request("GET", "/general/getConfig", auth="public")
         """
         return self._http.send(RequestSpec(method, path, auth, body))
 
@@ -109,73 +116,50 @@ class BulutklinikClient:
 
 
 class AsyncBulutklinikClient:
-    """Asynchronous Bulutklinik API client. Usable as an async context manager."""
+    """Asynchronous Bulutklinik partner API client. Usable as an async context
+    manager. Same surface and semantics as :class:`BulutklinikClient`."""
 
     def __init__(
         self,
         *,
         environment: Environment | str = Environment.PRODUCTION,
+        api_version: ApiVersion | str = ApiVersion.V3,
         base_url: str | None = None,
         lang: str = "tr",
-        client_id: str | None = None,
-        client_secret: str | None = None,
         partner_token: str | None = None,
         token_store: TokenStore | None = None,
         timeout: float = 30.0,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
-        store: TokenStore = token_store or InMemoryTokenStore()
+        store = _resolve_store(partner_token, token_store)
         client = httpx.AsyncClient(timeout=timeout, transport=transport)
         self._http = AsyncHttpClient(
-            base_url=resolve_base_url(environment, base_url),
+            base_url=resolve_base_url(environment, base_url, api_version),
             lang=lang,
-            client_id=client_id,
-            client_secret=client_secret,
-            partner_token=partner_token,
             token_store=store,
             client=client,
         )
         self.token_store = store
-        self.auth = aresources.AsyncAuthResource(self._http)
         self.doctors = aresources.AsyncDoctorsResource(self._http)
         self.slots = aresources.AsyncSlotsResource(self._http)
         self.appointments = aresources.AsyncAppointmentsResource(self._http)
-        self.payments = aresources.AsyncPaymentsResource(self._http)
         self.measures = aresources.AsyncMeasuresResource(self._http)
-        self.skin = aresources.AsyncSkinResource(self._http)
-        self.meals = aresources.AsyncMealsResource(self._http)
         self.laboratory = aresources.AsyncLaboratoryResource(self._http)
         self.diets = aresources.AsyncDietsResource(self._http)
-        self.addresses = aresources.AsyncAddressesResource(self._http)
-        #: Company-scoped partner surface (``/outher``).
-        self.partner = AsyncPartnerNamespace(self._http)
 
     async def request(
         self,
         method: str,
         path: str,
         *,
-        auth: AuthMode = "bearer",
+        auth: AuthMode = "partner",
         body: dict[str, Any] | None = None,
     ) -> Any:
-        """Escape hatch: call any Bulutklinik API endpoint that does not yet have
-        a typed resource method.
-
-        The request still goes through the shared transport, so default headers,
-        the chosen ``auth`` mode (``"bearer"`` by default), silent token refresh +
-        retry, envelope unwrapping and the typed error hierarchy all apply. Returns
-        the unwrapped ``data`` payload. Prefer a typed resource method when one
-        exists; reach for ``request`` only for the gaps.
-
-        :param method: HTTP method (``"GET"`` / ``"POST"`` / ``"PUT"`` / ``"DELETE"``).
-        :param path: Path relative to the configured base URL, e.g. ``"/patients/allBranches"``.
-        :param auth: Auth mode — ``"public"`` / ``"bearer"`` (default) / ``"partner"``.
-        :param body: Optional JSON payload (a dict); omitted on ``GET``.
+        """Escape hatch — see :meth:`BulutklinikClient.request`.
 
         Example::
 
-            branches = await client.request("GET", "/patients/allBranches")
-            created = await client.request("POST", "/patients/someNewEndpoint", body={"foo": "bar"})
+            branches = await client.request("GET", "/outher/branches")
         """
         return await self._http.send(RequestSpec(method, path, auth, body))
 

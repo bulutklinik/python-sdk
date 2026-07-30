@@ -5,35 +5,32 @@ from typing import Protocol, runtime_checkable
 
 @runtime_checkable
 class TokenStore(Protocol):
-    """Pluggable token persistence. The default is in-memory; provide your own to
-    persist tokens to a file, cache, database or session."""
+    """Pluggable source for the partner token.
 
-    def get_access_token(self) -> str | None: ...
+    The token is read on **every** request, so pointing this at a file, cache,
+    database or secret manager lets a long-running process pick up a newly issued
+    token without being rebuilt.
+    """
 
-    def get_refresh_token(self) -> str | None: ...
+    def get_token(self) -> str | None: ...
 
-    def set_tokens(self, access_token: str, refresh_token: str | None) -> None: ...
+    def set_token(self, token: str | None) -> None: ...
 
     def clear(self) -> None: ...
 
 
 class InMemoryTokenStore:
-    """In-memory token store (default). Tokens live for the lifetime of the object."""
+    """In-memory token store (default). The token lives for the lifetime of the
+    object."""
 
-    def __init__(self, access_token: str | None = None, refresh_token: str | None = None) -> None:
-        self._access = access_token
-        self._refresh = refresh_token
+    def __init__(self, token: str | None = None) -> None:
+        self._token = token
 
-    def get_access_token(self) -> str | None:
-        return self._access
+    def get_token(self) -> str | None:
+        return self._token
 
-    def get_refresh_token(self) -> str | None:
-        return self._refresh
-
-    def set_tokens(self, access_token: str, refresh_token: str | None) -> None:
-        self._access = access_token
-        self._refresh = refresh_token
+    def set_token(self, token: str | None) -> None:
+        self._token = token
 
     def clear(self) -> None:
-        self._access = None
-        self._refresh = None
+        self._token = None

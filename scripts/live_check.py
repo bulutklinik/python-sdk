@@ -1,12 +1,19 @@
 """Live smoke test against the Bulutklinik test environment (apitest).
 
-Read-only flow; each step is independent. Credentials default to the repo's
-Postman collection (test account). Run: python scripts/live_check.py
+Read-only flow; each step is independent. Needs a partner token issued for a test
+company with the `apiouther` scope:
+
+    BK_PARTNER_TOKEN=... python scripts/live_check.py
+
+Unlike the patient surface there is no shared test credential — the token is
+per-integration. Steps that touch a patient need one that exists inside the
+token's own company; set BK_PATIENT_TCKN or BK_PATIENT_PHONE to run them.
 """
 
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import Callable
 from typing import Any
 
@@ -14,12 +21,15 @@ from bulutklinik import ApiError, BulutklinikClient
 
 
 def main() -> None:
+    partner_token = os.environ.get("BK_PARTNER_TOKEN")
+    if not partner_token:
+        print("BK_PARTNER_TOKEN is required.", file=sys.stderr)
+        raise SystemExit(2)
+
     client = BulutklinikClient(
         environment="test",
-        client_id=os.environ.get("BK_CLIENT_ID", "96b630b3-f62a-4e67-b33c-b58802dca5af"),
-        client_secret=os.environ.get(
-            "BK_CLIENT_SECRET", "KPgmEavOSomEl8mQu1ZZMoyZaVXBSuuKxrrzMAkX"
-        ),
+        api_version=os.environ.get("BK_API_VERSION", "v3"),
+        partner_token=partner_token,
     )
     results: list[tuple[str, bool]] = []
 
@@ -40,34 +50,22 @@ def main() -> None:
             results.append((name, False))
             return None
 
-    login = step(
-        "auth.connect",
-        lambda: client.auth.connect(
-            os.environ.get("BK_USERNAME", "hackathon@bulutklinik.test"),
-            os.environ.get("BK_PASSWORD", "Hackathon2026"),
-            "email",
-        ),
-    )
-    stored = client.token_store.get_access_token() is not None
-    two_factor = getattr(login, "two_factor_required", None)
-    print(f"    twoFactorRequired={two_factor} accessTokenStored={stored}")
-
+    # --- Scope-only steps: prove the token and base URL without any patient.
     branches = step("doctors.branches", client.doctors.branches)
     print(f"    branches={len(branches) if isinstance(branches, list) else 'n/a'}")
 
     locations = step("doctors.locations", client.doctors.locations)
     print(f"    locations={len(locations) if isinstance(locations, list) else 'n/a'}")
 
-    step("doctors.quickSearch", lambda: client.doctors.quick_search("kardiyo", "interview"))
+    catalog = step("laboratory.catalog", client.laboratory.catalog)
+    print(f"    catalog={len(catalog) if isinstance(catalog, list) else 'n/a'}")
 
     found = step(
         "doctors.search",
         lambda: client.doctors.search(
             search_params={"withFreeText": "kardiyoloji"},
-            order_params=["slot"],
-            other_params=["isInterviewable"],
             current_page=1,
-            per_page_limit=10,
+            order_params=["slot"],
         ),
     )
     count = found.get("foundDoctorsCount") if isinstance(found, dict) else "n/a"
@@ -77,13 +75,28 @@ def main() -> None:
     detail = step("doctors.detail", lambda: client.doctors.detail(doctor_id))
     print(f"    detailKeys={len(detail) if isinstance(detail, dict) else 'n/a'}")
 
-    slots = step("slots.schedule", lambda: client.slots.schedule(doctor_id, "interview"))
+    step("appointments.checkDoctor", lambda: client.appointments.check_doctor(doctor_id, 0))
+
+    slots = step("slots.schedule", lambda: client.slots.schedule(doctor_id))
     print(f"    slotDays={len(slots) if isinstance(slots, dict) else 'n/a'}")
 
-    last = step("measures.last", client.measures.last)
-    print(f"    measuresLastKeys={len(last) if isinstance(last, dict) else 'n/a'}")
+    # --- Patient-scoped steps. A TCKN that works on the patient surface will not
+    #     necessarily resolve here: the patient must exist in the token's company.
+    patient: dict[str, str] | None = None
+    if tckn := os.environ.get("BK_PATIENT_TCKN"):
+        patient = {"identityNumber": tckn}
+    elif phone := os.environ.get("BK_PATIENT_PHONE"):
+        patient = {"phoneNumber": phone}
 
-    step("auth.disconnect", client.auth.disconnect)
+    if patient is not None:
+        last = step("measures.last", lambda: client.measures.last(patient))
+        print(f"    measuresLastKeys={len(last) if isinstance(last, dict) else 'n/a'}")
+
+        step("diets.list", lambda: client.diets.list(patient))
+        step("laboratory.results", lambda: client.laboratory.results(patient))
+    else:
+        print("--  skipped patient-scoped steps (set BK_PATIENT_TCKN or BK_PATIENT_PHONE)")
+
     client.close()
 
     passed = sum(1 for _, ok in results if ok)
