@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 import pytest
 
@@ -13,7 +15,7 @@ from bulutklinik import (
     TransportError,
     ValidationError,
 )
-from helpers import body_of, recording_transport
+from helpers import Responder, body_of, recording_transport
 
 BASE = "https://apitest.bulutklinik.com/api/v3"
 
@@ -24,7 +26,9 @@ def _ok(_: httpx.Request) -> httpx.Response:
     return httpx.Response(200, json={"resultType": 0, "data": {"ok": True}})
 
 
-def client_with(responder, **kwargs) -> tuple[BulutklinikClient, list[httpx.Request]]:
+def client_with(
+    responder: Responder, **kwargs: Any
+) -> tuple[BulutklinikClient, list[httpx.Request]]:
     transport, requests = recording_transport(responder)
     kwargs.setdefault("partner_token", "PT")
     return BulutklinikClient(environment="test", transport=transport, **kwargs), requests
