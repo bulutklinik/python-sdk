@@ -318,7 +318,8 @@ class AuthResource:
 
     The Developer Platform issues a **client id**, a **client secret** and a
     project-specific **service identity** per approved application; the password
-    is the one set when registering on the portal. :meth:`connect` exchanges
+    belongs to that application only -- it is not the developer's portal account
+    password. :meth:`connect` exchanges
     those for an access + refresh token pair, which every other method then uses.
     """
 
