@@ -45,7 +45,7 @@ with BulutklinikClient(
     held = client.appointments.reserve(
         slot["slotId"],
         doctor_id,
-        {"name": "Ada", "surname": "Lovelace", "phoneNumber": "+905551112233"},
+        {"name": "Ada", "surname": "Lovelace", "phoneNumber": "+90 5551112233"},
         without_agreement=True,
     )
 
@@ -91,7 +91,7 @@ and never creates anything:
 
 ```python
 client.measures.last({"identityNumber": "12345678901"})
-client.diets.list({"phoneNumber": "+905551112233"})
+client.diets.list({"phoneNumber": "+90 5551112233"})
 ```
 
 `identityNumber` is primary; `phoneNumber` is a fallback accepted only when it
@@ -104,7 +104,7 @@ company if absent:
 
 ```python
 client.measures.add_list(
-    {"name": "Ada", "surname": "Lovelace", "phoneNumber": "+905551112233"},
+    {"name": "Ada", "surname": "Lovelace", "phoneNumber": "+90 5551112233"},
     [{"type": "pulse", "date_time": "2026-06-17 09:31", "pulse": 72}],
 )
 ```
