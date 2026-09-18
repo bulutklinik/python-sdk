@@ -37,7 +37,7 @@ def main() -> None:
         user = {
             "name": "Ada",
             "surname": "Lovelace",
-            "phoneNumber": os.environ.get("BK_PATIENT_PHONE", "+905551112233"),
+            "phoneNumber": os.environ.get("BK_PATIENT_PHONE", "+90 5551112233"),
             "identityNumber": os.environ.get("BK_PATIENT_TCKN"),
         }
 
